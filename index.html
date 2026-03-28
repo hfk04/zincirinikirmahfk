@@ -34,14 +34,6 @@
     .logo em { color: var(--gold); font-style: normal; }
     .logo-sub { font-size: 10px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--text3); }
     .header-right { display: flex; align-items: center; gap: 8px; }
-    .report-btn {
-      background: transparent; border: 1px solid var(--border); color: var(--text2);
-      padding: 8px 14px; border-radius: 6px; font-family: 'Outfit', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
-      cursor: pointer; transition: all 0.2s;
-    }
-    .report-btn:hover { border-color: var(--gold); color: var(--gold); }
-    .report-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(245,200,66,0.08); }
     nav {
       display: flex; background: var(--bg2); border-bottom: 1px solid var(--border);
       position: sticky; top: 64px; z-index: 99;
@@ -207,15 +199,6 @@
     .summary-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 16px 12px; text-align: center; }
     .summary-val { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 1px; color: var(--gold); line-height: 1; }
     .summary-lbl { font-size: 9px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--text3); margin-top: 4px; }
-    .report-panel { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 24px; animation: fadeUp 0.2s ease; }
-    .report-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; margin-bottom: 16px; color: var(--gold); }
-    .report-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-    .report-tab { flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text3); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all 0.15s; }
-    .report-tab.active { background: var(--gold); color: #000; border-color: var(--gold); }
-    .report-schedules { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-    .sched-btn { padding: 6px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; color: var(--text3); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
-    .sched-btn.active { background: rgba(245,200,66,0.12); border-color: var(--gold); color: var(--gold); }
-    .manual-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-sm { padding: 8px 14px !important; font-size: 11px !important; }
   </style>
 </head>
@@ -227,7 +210,6 @@
     <div class="logo-sub" id="headerDate"></div>
   </div>
   <div class="header-right">
-    <button class="report-btn" id="reportToggleBtn" onclick="toggleReport()">📊 RAPOR</button>
   </div>
 </header>
 
@@ -242,8 +224,6 @@
 
 <script>
 const API = "https://script.google.com/macros/s/AKfycbz1aKhGVIeXewPQZYHF2uN_dXYTPtlP7PYT08sXS5mrBMstJV2BpuDtBHIDaLRiBp1x/exec";
-const TG_TOKEN = "8740942466:AAF5EsBaP5cwqAquJ_JvexE3w8c7iWLSyEk";
-const TG_CHAT = "8740942466";
 
 const COLORS = ["#F5C842","#E84040","#3DD68C","#60A5FA","#F97316","#C084FC","#FB7185"];
 const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
@@ -266,10 +246,6 @@ let state = {
   selectedDate: todayKey(),
   showAdd: false,
   showDatePicker: false,
-  showReport: false,
-  reportTab: "telegram",
-  reportEmail: localStorage.getItem("reportEmail") || "",
-  reportSchedules: JSON.parse(localStorage.getItem("reportSchedules") || '["weekly"]'),
   calYear: new Date().getFullYear(),
   calMonth: new Date().getMonth(),
   calSelected: null,
@@ -317,7 +293,6 @@ async function loadData() {
     state.habits=hR.habits||[]; state.completions=cR.completions||{};
   } catch(e){showToast("Bağlantı hatası!");}
   state.loading=false; render();
-  checkScheduledReports();
 }
 
 async function addHabit(name,note) {
@@ -347,78 +322,11 @@ async function toggleDay(habitId,dateStr) {
   if(adding)showToast(getMotiv(calcStreak(state.completions[habitId])));
 }
 
-// ── TELEGRAM ──
-async function sendTelegram(msg) {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({chat_id:TG_CHAT,text:msg,parse_mode:"HTML"})
-    });
-    const d = await r.json();
-    return d.ok;
-  } catch(e){return false;}
-}
 
-// ── GMAIL via Apps Script ──
-async function sendEmail(subject,body) {
-  if(!state.reportEmail)return false;
-  try { await apiPost("sendEmail",{to:state.reportEmail,subject,body}); return true; } catch(e){return false;}
-}
 
-function buildReport(period) {
-  const now=new Date(); let startDate, label;
-  if(period==="weekly"){startDate=new Date(now);startDate.setDate(now.getDate()-6);label="Haftalık";}
-  else if(period==="monthly"){startDate=new Date(now.getFullYear(),now.getMonth(),1);label=`${MONTHS[now.getMonth()]} Ayı`;}
-  else{startDate=new Date(now.getFullYear(),0,1);label=`${now.getFullYear()} Yılı`;}
-  const days=Math.max(1,Math.round((now-startDate)/86400000)+1);
-  let lines=[`📊 <b>ZİNCİRİNİ KIRMA — ${label} Raporu</b>\n`,
-    `📅 ${startDate.toLocaleDateString("tr-TR")} – ${now.toLocaleDateString("tr-TR")}\n`];
-  let totalDone=0,totalPossible=0;
-  state.habits.forEach(h=>{
-    const dates=state.completions[h.id]||[];
-    const done=dates.filter(d=>new Date(d)>=startDate&&new Date(d)<=now).length;
-    const rate=Math.round((done/days)*100);
-    const streak=calcStreak(dates);
-    const bar="█".repeat(Math.round(rate/10))+"░".repeat(10-Math.round(rate/10));
-    lines.push(`<b>${escHtml(h.name)}</b>\n${bar} %${rate}\n✅ ${done}/${days} gün  🔥 Streak: ${streak}\n`);
-    totalDone+=done; totalPossible+=days;
-  });
-  const overall=state.habits.length?Math.round((totalDone/totalPossible)*100):0;
-  lines.push(`─────────────────\n🏆 <b>Genel Tamamlanma: %${overall}</b>\n💪 ${getMotiv(Math.max(0,...state.habits.map(h=>calcStreak(state.completions[h.id]||[]))))}`);
-  return lines.join("\n");
-}
 
-async function sendReport(period) {
-  const msg=buildReport(period);
-  const periodTR=period==="weekly"?"Haftalık":period==="monthly"?"Aylık":"Yıllık";
-  if(state.reportTab==="telegram"||state.reportTab==="both"){
-    const ok=await sendTelegram(msg);
-    showToast(ok?`✅ Telegram'a ${periodTR} rapor gönderildi!`:"❌ Telegram hatası!");
-  }
-  if(state.reportTab==="email"||state.reportTab==="both"){
-    if(!state.reportEmail){showToast("E-posta adresi girin!");return;}
-    const ok=await sendEmail(`Zincirini Kırma — ${periodTR} Rapor`,msg.replace(/<[^>]+>/g,""));
-    showToast(ok?`✅ Gmail'e ${periodTR} rapor gönderildi!`:"❌ Gmail hatası!");
-  }
-}
 
-function toggleSched(k){
-  state.reportSchedules=state.reportSchedules.includes(k)?state.reportSchedules.filter(s=>s!==k):[...state.reportSchedules,k];
-  localStorage.setItem("reportSchedules",JSON.stringify(state.reportSchedules));
-  render();
-}
 
-function checkScheduledReports(){
-  const now=new Date(),dow=now.getDay(),dom=now.getDate(),mon=now.getMonth();
-  const last=JSON.parse(localStorage.getItem("lastReportSent")||"{}");
-  const wk=`weekly-${now.getFullYear()}-${Math.ceil(dom/7)}`;
-  const mk=`monthly-${now.getFullYear()}-${mon}`;
-  const yk=`yearly-${now.getFullYear()}`;
-  if(state.reportSchedules.includes("weekly")&&dow===0&&!last[wk]){sendReport("weekly");last[wk]=true;}
-  if(state.reportSchedules.includes("monthly")&&dom===1&&!last[mk]){sendReport("monthly");last[mk]=true;}
-  if(state.reportSchedules.includes("yearly")&&dom===1&&mon===0&&!last[yk]){sendReport("yearly");last[yk]=true;}
-  localStorage.setItem("lastReportSent",JSON.stringify(last));
-}
 
 function switchView(v){
   state.view=v;state.showAdd=false;
@@ -426,7 +334,6 @@ function switchView(v){
   document.getElementById(`nav-${v}`).classList.add("active");
   render();
 }
-function toggleReport(){state.showReport=!state.showReport;render();}
 function switchToCalendar(id){state.calSelected=id;state.view="calendar";document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));document.getElementById("nav-calendar").classList.add("active");render();}
 function shiftDay(delta){
   const d=new Date(state.selectedDate);
@@ -438,25 +345,6 @@ function shiftDay(delta){
 function prevMonth(){state.calMonth--;if(state.calMonth<0){state.calMonth=11;state.calYear--;}render();}
 function nextMonth(){state.calMonth++;if(state.calMonth>11){state.calMonth=0;state.calYear++;}render();}
 
-function renderReportPanel(){
-  const tabs=[["telegram","📱 Telegram"],["email","📧 Gmail"],["both","🔀 İkisi"]];
-  const scheds=[["weekly","Her Pazar"],["monthly","Her Aybaşı"],["yearly","Her Yılbaşı"]];
-  return `<div class="report-panel">
-    <div class="report-title">📊 RAPOR AYARLARI</div>
-    <div class="report-tabs">${tabs.map(([k,l])=>`<button class="report-tab ${state.reportTab===k?"active":""}" onclick="state.reportTab='${k}';render()">${l}</button>`).join("")}</div>
-    ${state.reportTab!=="telegram"?`<div class="field-label" style="margin-bottom:6px">Gmail Adresi</div>
-      <input type="email" value="${escHtml(state.reportEmail)}" placeholder="ornek@gmail.com"
-        onchange="state.reportEmail=this.value;localStorage.setItem('reportEmail',this.value)" />`:""}
-    <div class="field-label" style="margin-bottom:8px">Otomatik Gönderim</div>
-    <div class="report-schedules">${scheds.map(([k,l])=>`<button class="sched-btn ${state.reportSchedules.includes(k)?"active":""}" onclick="toggleSched('${k}')">${l}</button>`).join("")}</div>
-    <div class="field-label" style="margin-bottom:8px">Şimdi Gönder</div>
-    <div class="manual-btns">
-      <button class="btn-primary btn-sm" onclick="sendReport('weekly')">Haftalık</button>
-      <button class="btn-primary btn-sm" onclick="sendReport('monthly')">Aylık</button>
-      <button class="btn-primary btn-sm" onclick="sendReport('yearly')">Yıllık</button>
-    </div>
-  </div>`;
-}
 
 function renderLoading(){return `<div class="loading"><div class="spinner"></div><div class="loading-text">Yükleniyor</div></div>`;}
 
@@ -469,8 +357,6 @@ function renderToday(){
     <div class="section-sub">Günlük Takip</div>
     <div class="section-title">${isToday?"BUGÜN":"GEÇMİŞ GÜN"}</div>
   </div></div>`;
-
-  if(state.showReport)html+=renderReportPanel();
 
   html+=`<div class="date-strip">
     <button class="day-nav-btn" onclick="shiftDay(-1)">‹</button>
@@ -772,8 +658,6 @@ function submitAdd(){
 function render(){
   const d=new Date();
   document.getElementById("headerDate").textContent=d.toLocaleDateString("tr-TR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
-  const rb=document.getElementById("reportToggleBtn");
-  if(rb)rb.classList.toggle("active",state.showReport);
   let html="";
   if(state.loading)html=renderLoading();
   else if(state.view==="today")html=renderToday();
