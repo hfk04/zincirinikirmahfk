@@ -629,8 +629,8 @@ function renderStats(){
       <div class="stat-header"><div class="stat-name">${escHtml(h.name)}</div><span style="font-family:'Bebas Neue';font-size:18px;letter-spacing:1px;color:${c}">🔥${streak}</span></div>
       <div class="stat-boxes">
         <div class="stat-box"><div class="stat-val">${total}</div><div class="stat-lbl">Toplam Gün</div></div>
-        <div class="stat-box"><div class="stat-val">${longest}</div><div class="stat-lbl">En Uzun Streak</div></div>
-        <div class="stat-box"><div class="stat-val">${streak}</div><div class="stat-lbl">Mevcut Streak</div></div>
+        <div class="stat-box"><div class="stat-val">${longest}</div><div class="stat-lbl">En Uzun</div></div>
+        <div class="stat-box"><div class="stat-val">${streak}</div><div class="stat-lbl">Mevcut Seri</div></div>
       </div>
       <div class="stat-motiv">${getMotiv(streak)}</div>
       ${h.note?`<div class="stat-note">📝 ${escHtml(h.note)}</div>`:""}
