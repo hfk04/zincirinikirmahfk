@@ -165,20 +165,17 @@
     .cal-day.empty { background: transparent; cursor: default; }
     .cal-day.today { border-color: var(--gold) !important; color: var(--text) !important; font-weight: 800; }
     .cal-day.done { color: #000 !important; }
-    .cal-day-headers { display: grid; grid-template-columns: repeat(7,1fr); margin-bottom: 4px; }
-    .cal-canvas-wrap { position: relative; width: 100%; }
-    .cal-canvas-wrap canvas { display: block; width: 100%; }
-    .cal-click-layer {
-      position: absolute; top: 0; left: 0;
-      display: grid; grid-template-columns: repeat(7,1fr);
-      pointer-events: none;
+    .cal-day {
+      aspect-ratio: 1; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid transparent;
+      transition: all 0.12s; background: var(--bg3); color: var(--text3);
+      flex-direction: column; gap: 2px;
     }
-    .cal-click-cell {
-      background: transparent; border: none; cursor: pointer;
-      pointer-events: all;
-    }
-    .cal-click-cell:hover { background: rgba(245,200,66,0.05); }
-    .cal-day { position: relative; z-index: 1; background: var(--bg3); }
+    .cal-day:hover:not(.empty) { border-color: var(--gold); color: var(--text); }
+    .cal-day.empty { background: transparent; cursor: default; border: none; }
+    .cal-day.today { border-color: var(--gold) !important; color: var(--text) !important; font-weight: 800; }
+    .cal-day.done { color: #000 !important; }
+    .cal-day-num { font-size: 12px; font-weight: 600; }
     .cal-day-num { font-size: 12px; font-weight: 600; }
     .cal-dots { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; padding: 0 2px; margin-top: 2px; }
     .cal-dot { width: 5px; height: 5px; border-radius: 50%; }
@@ -420,7 +417,6 @@ function renderCalendar(){
   const firstDow = new Date(state.calYear, state.calMonth, 1).getDay();
   const dim = new Date(state.calYear, state.calMonth+1, 0).getDate();
   const offset = (firstDow+6)%7;
-  const rows = Math.ceil((offset+dim)/7);
 
   let html = `<div class="section-header"><div><div class="section-sub">Geçmiş</div><div class="section-title">TAKVİM</div></div></div>`;
 
@@ -436,22 +432,34 @@ function renderCalendar(){
   // Month nav
   html += `<div class="month-nav"><button class="month-arrow" onclick="prevMonth()">‹</button><span class="month-title">${MONTHS[state.calMonth]} ${state.calYear}</span><button class="month-arrow" onclick="nextMonth()">›</button></div>`;
 
-  // Day headers
-  html += `<div class="cal-day-headers">`;
+  // Grid
+  html += `<div class="cal-grid">`;
   DAYS_TR.forEach(d => { html += `<div class="cal-hdr">${d}</div>`; });
-  html += `</div>`;
+  for(let i=0;i<offset;i++) html += `<div class="cal-day empty"></div>`;
 
-  // Canvas-based calendar
-  html += `<div class="cal-canvas-wrap" id="calWrap">
-    <canvas id="calCanvas"></canvas>
-  </div>`;
-
-  // Invisible click layer
-  html += `<div class="cal-click-layer" id="calClickLayer">`;
-  for(let i=0;i<offset;i++) html += `<div class="cal-click-cell"></div>`;
   for(let d=1;d<=dim;d++){
     const dk = dateKey(state.calYear, state.calMonth, d);
-    html += `<button class="cal-click-cell" onclick="handleCalDayClick('${dk}')"></button>`;
+    const it = dk === todayKey();
+
+    if(state.calSelected){
+      const h = state.habits.find(h=>h.id===state.calSelected);
+      const c = h ? COLORS[h.colorIdx%COLORS.length] : "#888";
+      const done = (state.completions[state.calSelected]||[]).includes(dk);
+      html += `<button class="cal-day ${it?"today":""} ${done?"done":""}"
+        style="${done?`background:${c};border-color:${c};color:#000`:""}"
+        onclick="handleCalDayClick('${dk}')">
+        <span class="cal-day-num">${d}</span>
+      </button>`;
+    } else {
+      const dots = state.habits
+        .filter(h=>(state.completions[h.id]||[]).includes(dk))
+        .map(h=>`<div class="cal-dot" style="background:${COLORS[h.colorIdx%COLORS.length]}"></div>`)
+        .join("");
+      html += `<div class="cal-day ${it?"today":""}" style="cursor:default">
+        <span class="cal-day-num">${d}</span>
+        <div class="cal-dots">${dots}</div>
+      </div>`;
+    }
   }
   html += `</div>`;
 
@@ -464,157 +472,6 @@ function renderCalendar(){
 
 function handleCalDayClick(dk){
   if(state.calSelected) toggleDay(state.calSelected, dk);
-}
-
-function drawCalendar(){
-  const wrap = document.getElementById("calWrap");
-  const canvas = document.getElementById("calCanvas");
-  const clickLayer = document.getElementById("calClickLayer");
-  if(!wrap || !canvas) return;
-
-  const W = wrap.offsetWidth;
-  const firstDow = new Date(state.calYear, state.calMonth, 1).getDay();
-  const dim = new Date(state.calYear, state.calMonth+1, 0).getDate();
-  const offset = (firstDow+6)%7;
-  const rows = Math.ceil((offset+dim)/7);
-  const COLS = 7;
-  const cellW = W / COLS;
-  const cellH = cellW * 0.75;
-  const H = rows * cellH;
-  const GAP = 4;
-
-  canvas.width = W;
-  canvas.height = H;
-  canvas.style.height = H + "px";
-  wrap.style.height = H + "px";
-  if(clickLayer){
-    clickLayer.style.width = W + "px";
-    clickLayer.style.height = H + "px";
-    clickLayer.style.gridTemplateColumns = `repeat(7, 1fr)`;
-    // set cell heights
-    clickLayer.querySelectorAll(".cal-click-cell").forEach(el => {
-      el.style.height = cellH + "px";
-    });
-  }
-
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0,0,W,H);
-
-  const getCell = (day) => {
-    const idx = offset + day - 1;
-    const col = idx % COLS;
-    const row = Math.floor(idx / COLS);
-    const x = col * cellW;
-    const y = row * cellH;
-    return {x, y, cx: x + cellW/2, cy: y + cellH/2, w: cellW, h: cellH};
-  };
-
-  const today = todayKey();
-
-  // Draw cell backgrounds only
-  for(let d=1;d<=dim;d++){
-    const {x,y,w,h} = getCell(d);
-    const dk = dateKey(state.calYear, state.calMonth, d);
-    const isToday = dk === today;
-    const radius = 10;
-    ctx.beginPath();
-    ctx.roundRect(x+GAP/2, y+GAP/2, w-GAP, h-GAP, radius);
-    ctx.fillStyle = "#1F1F1F";
-    ctx.fill();
-    if(isToday){
-      ctx.beginPath();
-      ctx.roundRect(x+GAP/2, y+GAP/2, w-GAP, h-GAP, radius);
-      ctx.strokeStyle = "#F5C842";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-
-  // Draw lines for each habit
-  state.habits.forEach((h, hi) => {
-    const color = COLORS[h.colorIdx % COLORS.length];
-    const dates = state.completions[h.id] || [];
-    const total = state.habits.length;
-    // vertical offset per habit so they don't stack
-    const vOff = total > 1 ? (hi/(total-1) - 0.5) * (cellH * 0.35) : 0;
-
-    const doneDays = [];
-    for(let d=1;d<=dim;d++){
-      const dk = dateKey(state.calYear, state.calMonth, d);
-      if(dates.includes(dk)) doneDays.push(d);
-    }
-    if(doneDays.length === 0) return;
-
-    // Split into consecutive segments
-    const segs = [];
-    let seg = [doneDays[0]];
-    for(let i=1;i<doneDays.length;i++){
-      if(doneDays[i]-doneDays[i-1]===1){ seg.push(doneDays[i]); }
-      else { segs.push(seg); seg=[doneDays[i]]; }
-    }
-    segs.push(seg);
-
-    segs.forEach(seg => {
-      const pts = seg.map(d => {
-        const c = getCell(d);
-        return { x: c.cx, y: c.cy + vOff };
-      });
-
-      if(pts.length === 1){
-        ctx.beginPath();
-        ctx.arc(pts[0].x, pts[0].y, 6, 0, Math.PI*2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        return;
-      }
-
-      // Glow
-      ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i=1;i<pts.length;i++){
-        const p=pts[i-1], n=pts[i];
-        const cpx=(p.x+n.x)/2;
-        ctx.bezierCurveTo(cpx,p.y,cpx,n.y,n.x,n.y);
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
-      ctx.restore();
-
-      // Dots on line
-      pts.forEach((pt,i) => {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, i===pts.length-1?6:4, 0, Math.PI*2);
-        ctx.fillStyle = color;
-        ctx.strokeStyle = "#0D0D0D";
-        ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
-      });
-    });
-  });
-
-  // Draw day numbers on top of everything
-  for(let d=1;d<=dim;d++){
-    const {x,y,w,h} = getCell(d);
-    const dk = dateKey(state.calYear, state.calMonth, d);
-    const isToday = dk === today;
-    ctx.font = `${isToday?"700":"500"} ${Math.round(cellH*0.22)}px Outfit, sans-serif`;
-    ctx.fillStyle = isToday ? "#F5C842" : "#F0EDE8";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "#0D0D0D";
-    ctx.shadowBlur = 4;
-    ctx.fillText(d, x+w/2, y+h*0.28);
-    ctx.shadowBlur = 0;
-  }
 }
 
 
@@ -666,12 +523,10 @@ function render(){
   document.getElementById("main").innerHTML=html;
   if(state.showAdd)setTimeout(()=>document.getElementById("newName")?.focus(),50);
   if(state.showDatePicker)setTimeout(()=>document.getElementById("dpk")?.focus(),50);
-  if(state.view==="calendar") setTimeout(drawCalendar, 50);
 }
 
 render();
 loadData();
-window.addEventListener("resize", ()=>{ if(state.view==="calendar") drawCalendar(); });
 </script>
 </body>
 </html>
